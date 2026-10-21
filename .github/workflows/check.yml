@@ -1,0 +1,17 @@
+name: protocole
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dependances
+        run: python3 -m pip install pyyaml pytest
+      - name: Code genere a jour
+        run: python3 gen.py --check
+      - name: Tests (aller-retour Python, disposition memoire C et C++)
+        run: python3 -m pytest -q tests

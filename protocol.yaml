@@ -1,0 +1,215 @@
+# =============================================================================
+# ICD Ethernet Zynq <-> LattePanda (ROS 2) -- SOURCE DE VERITE UNIQUE
+#
+# Tout le code d'interface est genere a partir de ce fichier :
+#   python3 gen.py            -> regenere generated/ (C firmware, C++ comm_node, Python)
+#   python3 gen.py --check    -> echoue si generated/ n'est pas a jour (CI)
+#
+# Regles :
+#   - Ne jamais modifier generated/ a la main.
+#   - Changement incompatible (id, champ, type, ordre) : incrementer `version`.
+#     Le hash du protocole (calcule par gen.py, envoye dans HEARTBEAT) change
+#     de toute facon des qu'un element semantique change ; `doc` et `unit`
+#     n'entrent pas dans le hash.
+#   - Little-endian, structures packees (aucun padding).
+#   - Types : u8 u16 u32 i8 i16 i32 f32, un type de `types`, ou T[N].
+#   - payload: [champs...] -> structure propre au message
+#     payload: <type>      -> structure partagee definie dans `types`
+#     payload: text        -> texte ASCII libre, longueur = payload_len
+#     payload: null        -> format pas encore defini (message reserve)
+# =============================================================================
+
+version: 1          # ETH_PROTOCOL_VERSION, octet `version` de chaque en-tete
+
+frame:
+  magic: 0xC0DE
+  max_payload: 512
+  raw_text_id: 0xFF   # type factice passe au handler pour les canaux non framés
+  crc: "CRC16-CCITT (poly 0x1021, init 0xFFFF) sur l'en-tete (crc16 = 0) puis le payload"
+  header:
+    - { name: magic,        type: u16, doc: "ETH_FRAME_MAGIC, permet de resynchroniser le flux" }
+    - { name: version,      type: u8,  doc: "ETH_PROTOCOL_VERSION" }
+    - { name: msg_type,     type: u8,  doc: "eth_msg_type_t" }
+    - { name: seq,          type: u16, doc: "compteur roulant, un par canal" }
+    - { name: timestamp_us, type: u32, unit: us, doc: "horodatage Zynq, cf eth_get_timestamp_us()" }
+    - { name: payload_len,  type: u16, doc: "longueur du payload qui suit" }
+    - { name: crc16,        type: u16, doc: "CRC16-CCITT sur (header, crc16 mis a 0) + payload" }
+
+# direction vue du Zynq : tx = le Zynq emet (le LattePanda ecoute ce port),
+# rx = le Zynq ecoute ce port. framed=false : payload brut sans en-tete.
+channels:
+  DEBUG:     { port: 5000, direction: tx, framed: true,  doc: "Zynq -> PC, texte libre (printf-like)" }
+  TELEMETRY: { port: 5001, direction: tx, framed: true,  doc: "Zynq -> PC, trames structurees periodiques" }
+  CMD:       { port: 5002, direction: rx, framed: true,  doc: "PC -> Zynq, commandes" }
+  RAW_CMD:   { port: 5003, direction: rx, framed: false, doc: "PC -> Zynq, commandes brutes (debug)" }
+
+# Structures reutilisees dans plusieurs messages
+types:
+  lidar_point:
+    doc: "Point lidar LD19"
+    fields:
+      - { name: distance_mm, type: u16, unit: mm, doc: "0 = point invalide/filtre" }
+      - { name: angle_cdeg,  type: u16, unit: cdeg, doc: "centiemes de degre, 0..35999" }
+
+  set_camera:
+    doc: "Miroir de Set_camera (common_type.h) : pose mesuree par une camera"
+    fields:
+      - { name: x,       type: f32, unit: m }
+      - { name: y,       type: f32, unit: m }
+      - { name: t,       type: f32, unit: rad }
+      - { name: delay,   type: u32, unit: ms, doc: "latence de calcul" }
+      - { name: noise_x, type: f32, unit: m,   doc: "ecart-type" }
+      - { name: noise_y, type: f32, unit: m,   doc: "ecart-type" }
+      - { name: noise_t, type: f32, unit: rad, doc: "ecart-type" }
+
+messages:
+  # --------------------------------------------------------------- TX (Zynq -> PC)
+  HEARTBEAT:
+    id: 0x01
+    channel: TELEMETRY
+    doc: "Emis a 1 Hz par CPU0. Le PC compare protocol_hash au sien avant de piloter."
+    payload:
+      - { name: uptime_ms,     type: u32, unit: ms }
+      - { name: state,         type: u8,  doc: "0 = boucle principale active" }
+      - { name: flags,         type: u8,  doc: "bit0 = AU appuye, bit1 = laisse tiree" }
+      - { name: protocol_hash, type: u32, doc: "ETH_PROTOCOL_HASH du firmware" }
+
+  DEBUG_TEXT:
+    id: 0x02
+    channel: DEBUG
+    payload: text
+
+  ODOM:
+    id: 0x10
+    channel: TELEMETRY
+    payload:
+      - { name: x,     type: f32, unit: m }
+      - { name: y,     type: f32, unit: m }
+      - { name: theta, type: f32, unit: rad }
+      - { name: vx,    type: f32, unit: m/s }
+      - { name: vy,    type: f32, unit: m/s }
+      - { name: omega, type: f32, unit: rad/s }
+
+  IMU:
+    id: 0x11
+    channel: TELEMETRY
+    payload:
+      - { name: qw, type: f32 }
+      - { name: qx, type: f32 }
+      - { name: qy, type: f32 }
+      - { name: qz, type: f32 }
+      - { name: gyro_x,  type: f32, unit: rad/s }
+      - { name: gyro_y,  type: f32, unit: rad/s }
+      - { name: gyro_z,  type: f32, unit: rad/s }
+      - { name: accel_x, type: f32, unit: m/s2 }
+      - { name: accel_y, type: f32, unit: m/s2 }
+      - { name: accel_z, type: f32, unit: m/s2 }
+
+  MOTOR_STATE:
+    id: 0x12
+    channel: TELEMETRY
+    payload: null
+
+  ROBOT_STATE:
+    id: 0x13
+    channel: TELEMETRY
+    doc: "Pose et vitesse estimees (Kalman CPU1), emis periodiquement"
+    payload:
+      - { name: timestamp_ms,    type: u32, unit: ms }
+      - { name: x,               type: f32, unit: m }
+      - { name: y,               type: f32, unit: m }
+      - { name: theta,           type: f32, unit: rad }
+      - { name: speed_linear,    type: f32, unit: m/s }
+      - { name: speed_direction, type: f32, unit: rad }
+      - { name: speed_angular,   type: f32, unit: rad/s }
+      - { name: motion_done,     type: u8 }
+
+  AU:
+    id: 0x14
+    channel: TELEMETRY
+    doc: "Emis sur chaque changement d'etat. `state` DOIT rester le 1er octet (comm_node lit payload[0])."
+    payload:
+      - { name: state,        type: u8,  doc: "0 = AU relache, 1 = AU appuye" }
+      - { name: timestamp_ms, type: u32, unit: ms }
+
+  LEASH:
+    id: 0x15
+    channel: TELEMETRY
+    doc: "Emis sur chaque changement d'etat. comm_node publie \"LEASH\" (depart du match) si state == 1."
+    payload:
+      - { name: state,        type: u8,  doc: "0 = laisse relachee, 1 = laisse tiree" }
+      - { name: timestamp_ms, type: u32, unit: ms }
+
+  LIDAR_SCAN_CHUNK:
+    id: 0x16
+    channel: TELEMETRY
+    doc: "Scan LD19 complet decoupe en morceaux ; seuls point_count points sont emis"
+    payload:
+      - { name: lidar_id,     type: u8 }
+      - { name: scan_id,      type: u32 }
+      - { name: timestamp_ms, type: u32, unit: ms }
+      - { name: chunk_index,  type: u16 }
+      - { name: chunk_count,  type: u16 }
+      - { name: point_count,  type: u16 }
+      - { name: points,       type: "lidar_point[100]", count_field: point_count }
+
+  # --------------------------------------------------------------- RX (PC -> Zynq)
+  CMD_GENERIC:
+    id: 0x20
+    channel: CMD
+    doc: "Commande texte, passee a l'interpreteur (meme syntaxe que l'UART)"
+    payload: text
+
+  CMD_GOAL_POSITION:
+    id: 0x21
+    channel: CMD
+    doc: "Miroir de Position (common_type.h)"
+    payload:
+      - { name: x, type: f32, unit: m }
+      - { name: y, type: f32, unit: m }
+      - { name: t, type: f32, unit: rad }
+
+  CMD_SET_LIDAR:
+    id: 0x22
+    channel: CMD
+    doc: "Miroir de Set_lidar (common_type.h) : pose mesuree par le lidar"
+    payload:
+      - { name: x,     type: f32, unit: m }
+      - { name: y,     type: f32, unit: m }
+      - { name: t,     type: f32, unit: rad }
+      - { name: delay, type: u32, unit: ms, doc: "latence de calcul" }
+
+  CMD_SET_CAMERA_1:
+    id: 0x23
+    channel: CMD
+    payload: set_camera
+
+  CMD_SET_CAMERA_2:
+    id: 0x24
+    channel: CMD
+    payload: set_camera
+
+  CMD_SET_CAMERA_3:
+    id: 0x25
+    channel: CMD
+    payload: set_camera
+
+  CMD_SET_SPEED_MAX:
+    id: 0x26
+    channel: CMD
+    doc: "Format pas encore defini (non cable cote firmware)"
+    payload: null
+
+  CMD_BLOCK:
+    id: 0x27
+    channel: CMD
+    doc: "Bloque le robot (asserv_mode = 4)"
+    payload:
+      - { name: value, type: u8, doc: "1" }
+
+  CMD_FREE:
+    id: 0x28
+    channel: CMD
+    doc: "Libere le robot (asserv_mode = 0)"
+    payload:
+      - { name: value, type: u8, doc: "1" }
