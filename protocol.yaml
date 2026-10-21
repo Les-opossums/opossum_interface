@@ -153,6 +153,31 @@ messages:
       - { name: point_count,  type: u16 }
       - { name: points,       type: "lidar_point[100]", count_field: point_count }
 
+  CALIB_SAMPLE:
+    id: 0x17
+    channel: TELEMETRY
+    doc: "Log de calibration (CALIBLOG 1 [periode_ms]), emis a 100 Hz par defaut. Miroir de Calib_sample (libs/opossum_control/src/control_types.h). Grandeurs integrees : travailler sur les differences."
+    payload:
+      - { name: tick_ms,     type: u32,    unit: ms,    doc: "pas rapides (1 ms) depuis control_init (CPU1)" }
+      - { name: wheel_dist,  type: "f32[4]", unit: m,   doc: "distance integree par roue, rayon nominal, signe odometrie" }
+      - { name: gyro_z,      type: f32,    unit: rad/s, doc: "derniere mesure gyro brute" }
+      - { name: gyro_angle,  type: f32,    unit: rad,   doc: "integrale du gyro brut, non repliee" }
+      - { name: gyro_seq,    type: u32,                 doc: "compteur de mesures gyro" }
+      - { name: odo_x,       type: f32,    unit: m }
+      - { name: odo_y,       type: f32,    unit: m }
+      - { name: odo_t,       type: f32,    unit: rad }
+      - { name: kal_x,       type: f32,    unit: m }
+      - { name: kal_y,       type: f32,    unit: m }
+      - { name: kal_t,       type: f32,    unit: rad }
+      - { name: lidar_x,     type: f32,    unit: m,     doc: "derniere mesure lidar recue (SETLIDAR)" }
+      - { name: lidar_y,     type: f32,    unit: m }
+      - { name: lidar_t,     type: f32,    unit: rad }
+      - { name: lidar_delay, type: u32,    unit: ms,    doc: "retard annonce par cette mesure" }
+      - { name: lidar_rx_ms, type: u32,    unit: ms,    doc: "tick_ms a sa reception" }
+      - { name: lidar_count, type: u32,                 doc: "nombre de mesures lidar recues" }
+      - { name: motion_done, type: u8,                  doc: "0 arrive, 1 en mouvement, 2 freine" }
+      - { name: flags,       type: u8,                  doc: "bit0 Kalman initialise, bit1 arret d'urgence" }
+
   # --------------------------------------------------------------- RX (PC -> Zynq)
   CMD_GENERIC:
     id: 0x20

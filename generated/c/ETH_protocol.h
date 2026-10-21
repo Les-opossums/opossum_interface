@@ -12,7 +12,7 @@
 /* --- IDENTIFIANTS RESEAU --- */
 #define ETH_FRAME_MAGIC      0xC0DE
 #define ETH_PROTOCOL_VERSION 1
-#define ETH_PROTOCOL_HASH    0x50BCB662u /* hash de protocol.yaml, envoye dans HEARTBEAT */
+#define ETH_PROTOCOL_HASH    0xEAE76C2Fu /* hash de protocol.yaml, envoye dans HEARTBEAT */
 
 #define ETH_DEBUG_PORT       5000   /* Zynq -> PC, texte libre (printf-like) */
 #define ETH_TELEMETRY_PORT   5001   /* Zynq -> PC, trames structurees periodiques */
@@ -61,6 +61,7 @@ typedef enum {
     X(AU,                0x14, ETH_CHANNEL_TELEMETRY) \
     X(LEASH,             0x15, ETH_CHANNEL_TELEMETRY) \
     X(LIDAR_SCAN_CHUNK,  0x16, ETH_CHANNEL_TELEMETRY) \
+    X(CALIB_SAMPLE,      0x17, ETH_CHANNEL_TELEMETRY) \
     /* --- MESSAGES RX (PC -> Zynq) --- */ \
     X(CMD_GENERIC,       0x20, ETH_CHANNEL_CMD) \
     X(CMD_GOAL_POSITION, 0x21, ETH_CHANNEL_CMD) \

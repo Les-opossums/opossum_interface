@@ -12,7 +12,7 @@ namespace eth {
 
 constexpr uint16_t FRAME_MAGIC      = 0xC0DE;
 constexpr uint8_t  PROTOCOL_VERSION = 1;
-constexpr uint32_t PROTOCOL_HASH    = 0x50BCB662u;
+constexpr uint32_t PROTOCOL_HASH    = 0xEAE76C2Fu;
 constexpr uint16_t MAX_PAYLOAD      = 512;
 constexpr uint8_t  MSG_RAW_TEXT     = 0xFF;
 constexpr size_t   FRAME_CRC_OFFSET = 12;
@@ -46,6 +46,7 @@ enum MsgId : uint8_t {
     MSG_AU = 0x14,
     MSG_LEASH = 0x15,
     MSG_LIDAR_SCAN_CHUNK = 0x16,
+    MSG_CALIB_SAMPLE = 0x17,
     MSG_CMD_GENERIC = 0x20,
     MSG_CMD_GOAL_POSITION = 0x21,
     MSG_CMD_SET_LIDAR = 0x22,
@@ -59,7 +60,7 @@ enum MsgId : uint8_t {
 
 // kind : 0 = format non defini, 1 = texte, 2 = structure
 struct MessageInfo { const char *name; uint8_t id; Channel channel; uint8_t kind; uint16_t size; };
-constexpr size_t MESSAGE_COUNT = 18;
+constexpr size_t MESSAGE_COUNT = 19;
 constexpr MessageInfo MESSAGES[MESSAGE_COUNT] = {
     {"HEARTBEAT", 0x01, Channel::TELEMETRY, 2, 10},
     {"DEBUG_TEXT", 0x02, Channel::DEBUG, 1, 0},
@@ -70,6 +71,7 @@ constexpr MessageInfo MESSAGES[MESSAGE_COUNT] = {
     {"AU", 0x14, Channel::TELEMETRY, 2, 5},
     {"LEASH", 0x15, Channel::TELEMETRY, 2, 5},
     {"LIDAR_SCAN_CHUNK", 0x16, Channel::TELEMETRY, 2, 415},
+    {"CALIB_SAMPLE", 0x17, Channel::TELEMETRY, 2, 82},
     {"CMD_GENERIC", 0x20, Channel::CMD, 1, 0},
     {"CMD_GOAL_POSITION", 0x21, Channel::CMD, 2, 12},
     {"CMD_SET_LIDAR", 0x22, Channel::CMD, 2, 16},
@@ -201,6 +203,30 @@ struct PayloadLidarScanChunk {
     LidarPoint points[100];
 };
 static_assert(sizeof(PayloadLidarScanChunk) == 415, "PayloadLidarScanChunk");
+
+// CALIB_SAMPLE (0x17) : Log de calibration (CALIBLOG 1 [periode_ms]), emis a 100 Hz par defaut. Miroir de Calib_sample (libs/opossum_control/src/control_types.h). Grandeurs integrees : travailler sur les differences.
+struct PayloadCalibSample {
+    uint32_t tick_ms;      // [ms] pas rapides (1 ms) depuis control_init (CPU1)
+    float wheel_dist[4];   // [m] distance integree par roue, rayon nominal, signe odometrie
+    float gyro_z;          // [rad/s] derniere mesure gyro brute
+    float gyro_angle;      // [rad] integrale du gyro brut, non repliee
+    uint32_t gyro_seq;     // compteur de mesures gyro
+    float odo_x;           // [m]
+    float odo_y;           // [m]
+    float odo_t;           // [rad]
+    float kal_x;           // [m]
+    float kal_y;           // [m]
+    float kal_t;           // [rad]
+    float lidar_x;         // [m] derniere mesure lidar recue (SETLIDAR)
+    float lidar_y;         // [m]
+    float lidar_t;         // [rad]
+    uint32_t lidar_delay;  // [ms] retard annonce par cette mesure
+    uint32_t lidar_rx_ms;  // [ms] tick_ms a sa reception
+    uint32_t lidar_count;  // nombre de mesures lidar recues
+    uint8_t motion_done;   // 0 arrive, 1 en mouvement, 2 freine
+    uint8_t flags;         // bit0 Kalman initialise, bit1 arret d'urgence
+};
+static_assert(sizeof(PayloadCalibSample) == 82, "PayloadCalibSample");
 
 // CMD_GOAL_POSITION (0x21) : Miroir de Position (common_type.h)
 struct PayloadCmdGoalPosition {

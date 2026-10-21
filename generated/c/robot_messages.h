@@ -101,6 +101,31 @@ typedef struct __attribute__((packed)) {
 #define ETH_LIDAR_SCAN_CHUNK_POINTS_MAX 100
 #define ETH_LIDAR_SCAN_CHUNK_FIXED_SIZE 15 /* taille sans le tableau `points` */
 
+/* CALIB_SAMPLE (0x17) : Log de calibration (CALIBLOG 1 [periode_ms]), emis a 100 Hz par defaut. Miroir de Calib_sample (libs/opossum_control/src/control_types.h). Grandeurs integrees : travailler sur les differences. */
+typedef struct __attribute__((packed)) {
+    uint32_t tick_ms;      /* [ms] pas rapides (1 ms) depuis control_init (CPU1) */
+    float wheel_dist[4];   /* [m] distance integree par roue, rayon nominal, signe odometrie */
+    float gyro_z;          /* [rad/s] derniere mesure gyro brute */
+    float gyro_angle;      /* [rad] integrale du gyro brut, non repliee */
+    uint32_t gyro_seq;     /* compteur de mesures gyro */
+    float odo_x;           /* [m] */
+    float odo_y;           /* [m] */
+    float odo_t;           /* [rad] */
+    float kal_x;           /* [m] */
+    float kal_y;           /* [m] */
+    float kal_t;           /* [rad] */
+    float lidar_x;         /* [m] derniere mesure lidar recue (SETLIDAR) */
+    float lidar_y;         /* [m] */
+    float lidar_t;         /* [rad] */
+    uint32_t lidar_delay;  /* [ms] retard annonce par cette mesure */
+    uint32_t lidar_rx_ms;  /* [ms] tick_ms a sa reception */
+    uint32_t lidar_count;  /* nombre de mesures lidar recues */
+    uint8_t motion_done;   /* 0 arrive, 1 en mouvement, 2 freine */
+    uint8_t flags;         /* bit0 Kalman initialise, bit1 arret d'urgence */
+} eth_payload_calib_sample_t; /* 82 octets */
+
+#define ETH_CALIB_SAMPLE_WHEEL_DIST_MAX 4
+
 /* CMD_GENERIC (0x20) : texte libre */
 
 /* CMD_GOAL_POSITION (0x21) : Miroir de Position (common_type.h) */
@@ -149,6 +174,7 @@ _Static_assert(sizeof(eth_payload_robot_state_t) == 29, "eth_payload_robot_state
 _Static_assert(sizeof(eth_payload_au_t) == 5, "eth_payload_au_t");
 _Static_assert(sizeof(eth_payload_leash_t) == 5, "eth_payload_leash_t");
 _Static_assert(sizeof(eth_payload_lidar_scan_chunk_t) == 415, "eth_payload_lidar_scan_chunk_t");
+_Static_assert(sizeof(eth_payload_calib_sample_t) == 82, "eth_payload_calib_sample_t");
 _Static_assert(sizeof(eth_payload_cmd_goal_position_t) == 12, "eth_payload_cmd_goal_position_t");
 _Static_assert(sizeof(eth_payload_cmd_set_lidar_t) == 16, "eth_payload_cmd_set_lidar_t");
 _Static_assert(sizeof(eth_payload_cmd_set_camera_1_t) == 28, "eth_payload_cmd_set_camera_1_t");

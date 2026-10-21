@@ -13,7 +13,7 @@ import struct
 
 FRAME_MAGIC = 0xC0DE
 PROTOCOL_VERSION = 1
-PROTOCOL_HASH = 0x50BCB662
+PROTOCOL_HASH = 0xEAE76C2F
 MAX_PAYLOAD = 512
 MSG_RAW_TEXT = 0xFF
 FRAME_CRC_OFFSET = 12
@@ -37,6 +37,7 @@ MESSAGES = {
     'AU': (0x14, 'TELEMETRY', 'struct'),
     'LEASH': (0x15, 'TELEMETRY', 'struct'),
     'LIDAR_SCAN_CHUNK': (0x16, 'TELEMETRY', 'struct'),
+    'CALIB_SAMPLE': (0x17, 'TELEMETRY', 'struct'),
     'CMD_GENERIC': (0x20, 'CMD', 'text'),
     'CMD_GOAL_POSITION': (0x21, 'CMD', 'struct'),
     'CMD_SET_LIDAR': (0x22, 'CMD', 'struct'),
@@ -62,6 +63,7 @@ PAYLOADS = {
     'AU': ('<BI', ['state', 'timestamp_ms'], None),
     'LEASH': ('<BI', ['state', 'timestamp_ms'], None),
     'LIDAR_SCAN_CHUNK': ('<BIIHHH', ['lidar_id', 'scan_id', 'timestamp_ms', 'chunk_index', 'chunk_count', 'point_count'], ('points', 'point_count', 'HH', ['distance_mm', 'angle_cdeg'])),
+    'CALIB_SAMPLE': ('<I4fffIfffffffffIIIBB', ['tick_ms', 'wheel_dist[0]', 'wheel_dist[1]', 'wheel_dist[2]', 'wheel_dist[3]', 'gyro_z', 'gyro_angle', 'gyro_seq', 'odo_x', 'odo_y', 'odo_t', 'kal_x', 'kal_y', 'kal_t', 'lidar_x', 'lidar_y', 'lidar_t', 'lidar_delay', 'lidar_rx_ms', 'lidar_count', 'motion_done', 'flags'], None),
     'CMD_GOAL_POSITION': ('<fff', ['x', 'y', 't'], None),
     'CMD_SET_LIDAR': ('<fffI', ['x', 'y', 't', 'delay'], None),
     'CMD_SET_CAMERA_1': ('<fffIfff', ['x', 'y', 't', 'delay', 'noise_x', 'noise_y', 'noise_t'], None),
